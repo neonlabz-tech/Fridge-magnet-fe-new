@@ -42,12 +42,7 @@ export default function ProductsSection() {
   }, []);
 
   const handleOrderNow = (productId: string) => {
-    const productPath = `/shop/${productId}`;
-    if (isLoggedIn()) {
-      router.push(productPath);
-    } else {
-      router.push(`/login?redirect=${encodeURIComponent(productPath)}`);
-    }
+      router.push(`/shop/${productId}`);
   };
 
   return (
@@ -87,7 +82,7 @@ export default function ProductsSection() {
             </motion.div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {products.map((product) => (
+              {products.slice(0, 4).map((product) => (
                 <motion.div
                   key={product._id}
                   variants={fadeUp}
@@ -99,20 +94,20 @@ export default function ProductsSection() {
                       product.galleryImages?.[0]?.secure_url;
 
                     return (
-                  <div className="relative h-52 bg-gradient-to-br from-blue-50 to-teal-50 overflow-hidden">
+                  <div className="relative h-75 sm:h-56 lg:h-52 bg-gradient-to-br from-blue-50 to-teal-50 overflow-hidden">
                     {imageUrl ? (
                       <Image
                         src={imageUrl}
                         alt={product.productName}
                         fill
-                        className="object-cover group-hover:scale-110 transition-transform duration-500"
+                        className="object-cover group-hover:scale-105 transition-transform duration-500"
                       />
                     ) : (
                       <div className="flex items-center justify-center h-full">
                         <Frame size={48} className="text-blue-300" />
                       </div>
                     )}
-                    <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm px-3 py-1 rounded-full text-xs font-bold text-red-500">
+                    <div className="absolute top-3 left-3 bg-blue-900 backdrop-blur-sm px-3 py-1 rounded-full text-xs font-bold text-white">
                       {product.imagecount} photos
                     </div>
                   </div>
@@ -137,7 +132,7 @@ export default function ProductsSection() {
                           e.stopPropagation();
                           handleOrderNow(product._id);
                         }}
-                        className="bg-red-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:shadow-lg hover:shadow-blue-50 transition-all"
+                        className="bg-red-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:shadow-lg hover:shadow-blue-50 transition-all cursor-pointer"
                       >
                         Order
                       </button>

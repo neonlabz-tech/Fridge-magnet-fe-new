@@ -40,12 +40,7 @@ export default function ShopPage() {
   }, [search, products]);
 
   const handleOrderNow = (productId: string) => {
-    const productPath = `/shop/${productId}`;
-    if (isLoggedIn()) {
-      router.push(productPath);
-    } else {
-      router.push(`/login?redirect=${encodeURIComponent(productPath)}`);
-    }
+      router.push(`/shop/${productId}`);
   };
 
   return (
@@ -131,20 +126,20 @@ export default function ShopPage() {
                     : "cursor-not-allowed opacity-75"
                 }`}
               >
-                <div className="relative h-56 bg-gradient-to-br from-blue-50 to-teal-50 overflow-hidden">
+                <div className="relative h-75 sm:h-56 lg:h-52 bg-gradient-to-br from-blue-50 to-teal-50 overflow-hidden">
                   {product.primaryImage ? (
                     <Image
                       src={product.primaryImage.secure_url}
                       alt={product.productName}
                       fill
-                      className="object-cover group-hover:scale-110 transition-transform duration-500"
+                      className="object-cover group-hover:scale-105 transition-transform duration-500"
                     />
                   ) : (
                     <div className="flex items-center justify-center h-full">
                       <Frame size={48} className="text-blue-50" />
                     </div>
                   )}
-                  <div className="absolute top-3 left-3 bg-white/90 backdrop-blur-sm px-3 py-1 rounded-full text-xs font-bold text-red-600">
+                  <div className="absolute top-3 left-3 bg-blue-900 backdrop-blur-sm px-3 py-1 rounded-full text-xs font-bold text-white">
                     {product.imagecount} photos
                   </div>
                   {product.stock <= 5 && product.stock > 0 && (
@@ -187,7 +182,7 @@ export default function ShopPage() {
                         }
                       }}
                       disabled={product.stock === 0}
-                      className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${
+                      className={`px-4 py-2 rounded-xl text-sm font-bold transition-all cursor-pointer ${
                         product.stock === 0
                           ? "bg-slate-100 text-slate-400 cursor-not-allowed"
                           : "bg-red-600 text-white hover:shadow-lg hover:shadow-blue-50"

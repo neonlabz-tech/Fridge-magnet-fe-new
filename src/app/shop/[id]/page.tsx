@@ -23,6 +23,12 @@ import { formatPrice } from "@/lib/utils";
 import { productApi } from "@/app/api/product.api";
 import { CartItem, Product } from "@/lib/data";
 
+function isLoggedIn(): boolean {
+  if (typeof document === "undefined") return false;
+  const match = document.cookie.match(/(?:^|;\s*)token=([^;]*)/);
+  return !!match?.[1];
+}
+const loggedIn = isLoggedIn();
 const COMPRESSION_OPTIONS = {
   maxSizeMB: 1,
   maxWidthOrHeight: 1920,
@@ -64,7 +70,13 @@ export default function ProductDetailPage({
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     accept: { "image/*": [] },
     maxFiles: product?.imagecount || 10,
+    disabled: !loggedIn,
     onDrop: (acceptedFiles) => {
+      if (!loggedIn) {
+        // toast.error("Please login to upload photos");
+        router.push(`/login?redirect=${encodeURIComponent(`/shop/${id}`)}`);
+        return;
+      }
       const maxCount = product?.imagecount || 10;
       const remaining = maxCount - uploadedFiles.length;
       const toAdd = acceptedFiles.slice(0, remaining);
@@ -81,6 +93,12 @@ export default function ProductDetailPage({
 
   const handleAddToCart = async () => {
     if (!product) return;
+
+    if (!isLoggedIn()) {
+    // toast.error("Please login to continue");
+    router.push(`/login?redirect=${encodeURIComponent(`/shop/${product._id}`)}`);
+    return;
+    }
 
     if (uploadedFiles.length === 0) {
       toast.error("Please upload photos");
@@ -108,11 +126,16 @@ export default function ProductDetailPage({
       const formData = new FormData();
       compressedFiles.forEach((file) => formData.append("files", file));
 
-      const res = await fetch("/api/upload-r2", { method: "POST", body: formData });
+      const res = await fetch("/api/upload-r2", {
+        method: "POST",
+        body: formData,
+      });
       if (!res.ok) throw new Error("Upload failed");
       const { urls: imageDataUrls } = await res.json();
 
-      const cart: CartItem[] = JSON.parse(sessionStorage.getItem("cart") || "[]");
+      const cart: CartItem[] = JSON.parse(
+        sessionStorage.getItem("cart") || "[]",
+      );
       cart.push({
         productId: product._id,
         productName: product.productName,
@@ -133,13 +156,18 @@ export default function ProductDetailPage({
             <p className="font-semibold text-sm">Added to cart! 🛒</p>
             <div className="flex gap-2">
               <button
-                onClick={() => { toast.dismiss(t.id); }}
+                onClick={() => {
+                  toast.dismiss(t.id);
+                }}
                 className="text-xs px-3 py-1.5 bg-slate-100 rounded-lg font-medium"
               >
                 Keep Shopping
               </button>
               <button
-                onClick={() => { toast.dismiss(t.id); router.push("/checkout"); }}
+                onClick={() => {
+                  toast.dismiss(t.id);
+                  router.push("/checkout");
+                }}
                 className="text-xs px-3 py-1.5 bg-gradient-to-r from-blue-600 to-blue-900 text-white rounded-lg font-medium"
               >
                 Go to Checkout
@@ -147,7 +175,7 @@ export default function ProductDetailPage({
             </div>
           </div>
         ),
-        { duration: 6000 }
+        { duration: 6000 },
       );
     } catch (err) {
       console.error("Cart error:", err);
@@ -167,7 +195,10 @@ export default function ProductDetailPage({
               <div className="h-64 sm:h-80 md:h-[380px] lg:h-[440px] xl:h-[480px] rounded-3xl bg-slate-200" />
               <div className="flex gap-3 p-2">
                 {[...Array(4)].map((_, i) => (
-                  <div key={i} className="w-20 h-20 rounded-2xl bg-slate-200 flex-shrink-0" />
+                  <div
+                    key={i}
+                    className="w-20 h-20 rounded-2xl bg-slate-200 flex-shrink-0"
+                  />
                 ))}
               </div>
               <div className="flex flex-wrap justify-center md:justify-start gap-2 pt-2">
@@ -218,8 +249,12 @@ export default function ProductDetailPage({
           <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4">
             <Frame size={36} className="text-blue-300" />
           </div>
-          <h2 className="text-2xl font-black text-slate-700">Product Not Found</h2>
-          <p className="text-slate-400 mt-2 text-sm">This product may have been removed.</p>
+          <h2 className="text-2xl font-black text-slate-700">
+            Product Not Found
+          </h2>
+          <p className="text-slate-400 mt-2 text-sm">
+            This product may have been removed.
+          </p>
           <button
             onClick={() => router.push("/shop")}
             className="mt-6 px-6 py-2.5 bg-gradient-to-r from-blue-600 to-blue-900 text-white rounded-xl font-bold text-sm hover:shadow-lg transition-all"
@@ -277,7 +312,7 @@ export default function ProductDetailPage({
         >
           {/* ── Left: Product Images ── */}
           <motion.div variants={fadeUp} className="space-y-4">
-            <div className="relative h-56 sm:h-72 md:h-[320px] lg:h-[360px] xl:h-[400px] rounded-3xl overflow-hidden bg-gradient-to-br from-blue-50 to-blue-50 shadow-xl shadow-blue-100/50">
+            <div className="relative h-75 sm:h-72 md:h-[320px] lg:h-[360px] xl:h-[400px] rounded-3xl overflow-hidden bg-gradient-to-br from-blue-50 to-blue-50 shadow-xl shadow-blue-100/50">
               {productImageUrls.length > 0 ? (
                 <Image
                   src={productImageUrls[selectedImage] || productImageUrls[0]}
@@ -288,7 +323,9 @@ export default function ProductDetailPage({
               ) : (
                 <div className="flex flex-col items-center justify-center h-full gap-3">
                   <Frame size={56} className="text-blue-50" />
-                  <p className="text-blue-300 text-sm font-medium">No preview available</p>
+                  <p className="text-blue-300 text-sm font-medium">
+                    No preview available
+                  </p>
                 </div>
               )}
               {product.stock <= 5 && product.stock > 0 && (
@@ -317,7 +354,12 @@ export default function ProductDetailPage({
                         : "border-slate-200 hover:border-blue-50 opacity-70 hover:opacity-100"
                     }`}
                   >
-                    <Image src={imageUrl} alt={`View ${i + 1}`} fill className="object-cover" />
+                    <Image
+                      src={imageUrl}
+                      alt={`View ${i + 1}`}
+                      fill
+                      className="object-cover"
+                    />
                   </button>
                 ))}
               </div>
@@ -327,7 +369,10 @@ export default function ProductDetailPage({
               {[
                 { icon: <Package size={13} />, label: "Premium Quality" },
                 { icon: <Truck size={13} />, label: "Fast Delivery" },
-                { icon: <CheckCircle2 size={13} />, label: "Satisfaction Guaranteed" },
+                {
+                  icon: <CheckCircle2 size={13} />,
+                  label: "Satisfaction Guaranteed",
+                },
               ].map((f) => (
                 <span
                   key={f.label}
@@ -342,10 +387,11 @@ export default function ProductDetailPage({
 
           {/* ── Right: Product Info + Upload ── */}
           <motion.div variants={fadeUp} className="space-y-5">
-
             {/* Product header */}
             <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-100 shadow-sm text-center lg:text-left">
-              <p className="text-xs text-slate-400 font-mono mb-1">{product.productId}</p>
+              <p className="text-xs text-slate-400 font-mono mb-1">
+                {product.productId}
+              </p>
               <h1 className="text-xl sm:text-2xl font-black text-slate-900 leading-tight mb-3">
                 {product.productName}
               </h1>
@@ -358,16 +404,24 @@ export default function ProductDetailPage({
               <div className="flex flex-wrap items-center lg:items-end justify-center lg:justify-between gap-4 pt-3 border-t border-slate-100">
                 <div className="flex gap-3">
                   <div className="bg-blue-50 rounded-2xl px-4 py-2.5 text-center">
-                    <p className="text-xl font-black text-red-600">{product.imagecount}</p>
+                    <p className="text-xl font-black text-red-600">
+                      {product.imagecount}
+                    </p>
                     <p className="text-xs text-blue-900 font-medium">Photos</p>
                   </div>
                   <div className="bg-teal-50 rounded-2xl px-4 py-2.5 text-center">
-                    <p className="text-xl font-black text-red-600">{product.stock}</p>
-                    <p className="text-xs text-blue-900 font-medium">In Stock</p>
+                    <p className="text-xl font-black text-red-600">
+                      {product.stock}
+                    </p>
+                    <p className="text-xs text-blue-900 font-medium">
+                      In Stock
+                    </p>
                   </div>
                 </div>
                 <div className="text-center lg:text-right">
-                  <p className="text-2xl sm:text-3xl font-black text-blue-900">{formatPrice(product.price)}</p>
+                  <p className="text-2xl sm:text-3xl font-black text-blue-900">
+                    {formatPrice(product.price)}
+                  </p>
                   <p className="text-xs text-slate-400">per set</p>
                 </div>
               </div>
@@ -380,13 +434,17 @@ export default function ProductDetailPage({
                   <div className="w-7 h-7 bg-blue-100 rounded-lg flex items-center justify-center">
                     <ImageIcon size={14} className="text-blue-900" />
                   </div>
-                  <h2 className="text-sm font-bold text-slate-700">Upload Your Photos</h2>
+                  <h2 className="text-sm font-bold text-slate-700">
+                    Upload Your Photos
+                  </h2>
                 </div>
-                <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
-                  uploadedFiles.length === maxImages
-                    ? "bg-blue-100 text-red-600"
-                    : "bg-blue-100 text-blue-900"
-                }`}>
+                <span
+                  className={`text-xs font-bold px-2.5 py-1 rounded-full ${
+                    uploadedFiles.length === maxImages
+                      ? "bg-blue-100 text-red-600"
+                      : "bg-blue-100 text-blue-900"
+                  }`}
+                >
                   {uploadedFiles.length}/{maxImages}
                 </span>
               </div>
@@ -408,12 +466,19 @@ export default function ProductDetailPage({
                       : "border-slate-200 hover:border-blue-50 hover:bg-blue-50/40"
                 }`}
               >
-                <input {...getInputProps()} disabled={uploadedFiles.length >= maxImages} />
+                <input
+                  {...getInputProps()}
+                  disabled={uploadedFiles.length >= maxImages}
+                />
                 <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-3">
                   <Upload size={22} className="text-blue-900" />
                 </div>
                 <p className="text-sm font-semibold text-slate-600">
-                  {isDragActive ? "Drop your photos here!" : "Drag & drop or click to browse"}
+                  {!loggedIn
+                    ? "Login to upload your photos"
+                    : isDragActive
+                      ? "Drop your photos here!"
+                      : "Drag & drop or click to browse"}
                 </p>
                 <p className="text-xs text-red-600 mt-1">
                   {uploadedFiles.length >= maxImages
@@ -427,7 +492,12 @@ export default function ProductDetailPage({
                   {uploadedFiles.map((file, i) => (
                     <div key={i} className="relative group">
                       <div className="relative h-16 rounded-xl overflow-hidden bg-slate-100 ring-2 ring-transparent group-hover:ring-blue-900 transition-all">
-                        <Image src={URL.createObjectURL(file)} alt={file.name} fill className="object-cover" />
+                        <Image
+                          src={URL.createObjectURL(file)}
+                          alt={file.name}
+                          fill
+                          className="object-cover"
+                        />
                       </div>
                       <button
                         type="button"

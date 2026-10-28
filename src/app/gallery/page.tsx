@@ -3,18 +3,7 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import { AnimatePresence, motion } from "framer-motion";
-import {
-  Cake,
-  ChevronLeft,
-  ChevronRight,
-  Gem,
-  Heart,
-  Images,
-  Plane,
-  Users,
-  X,
-  type LucideIcon,
-} from "lucide-react";
+import { ChevronLeft, ChevronRight, X } from "lucide-react";
 
 type GalleryImage = {
   src: string;
@@ -24,78 +13,34 @@ type GalleryImage = {
   height: number;
 };
 
-type Tab = {
-  name: string;
-  icon: LucideIcon;
-};
-
-const tabs: Tab[] = [
-  { name: "All", icon: Images },
-  { name: "Wedding", icon: Gem },
-  { name: "Family", icon: Users },
-  { name: "Birthday", icon: Cake },
-  { name: "Couples", icon: Heart },
-  { name: "Travel", icon: Plane },
-];
-
-const INITIAL_VISIBLE_COUNT = 10;
-
 const galleryImages: GalleryImage[] = [
-  {
-    src: "https://images.pexels.com/photos/10821416/pexels-photo-10821416.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
-    alt: "Wedding gallery photo",
-    category: "Wedding",
-    width: 940,
-    height: 650,
-  },
-  {
-    src: "https://images.pexels.com/photos/5137955/pexels-photo-5137955.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+    {
+    src: "https://pub-57b44696f3e243acb6e5fdb88145606e.r2.dev/gallery_images/IMG_8060.HEIC",
     alt: "Birthday gallery photo",
     category: "Birthday",
-    width: 940,
-    height: 650,
+    width: 1424,
+    height: 2532,
+  },
+    {
+    src: "https://pub-57b44696f3e243acb6e5fdb88145606e.r2.dev/gallery_images/IMG_8055.JPG.jpeg",
+    alt: "Birthday gallery photo",
+    category: "Birthday",
+    width: 1424,
+    height: 2532,
   },
   {
-    src: "https://images.pexels.com/photos/13699200/pexels-photo-13699200.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
-    alt: "Family gallery photo",
-    category: "Family",
-    width: 940,
-    height: 650,
+    src: "https://pub-57b44696f3e243acb6e5fdb88145606e.r2.dev/gallery_images/IMG_8062.HEIC",
+    alt: "Birthday gallery photo",
+    category: "Birthday",
+    width: 1424,
+    height: 2532,
   },
   {
-    src: "https://images.pexels.com/photos/10260849/pexels-photo-10260849.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
-    alt: "Graduation gallery photo",
-    category: "Family",
-    width: 940,
-    height: 650,
-  },
-  {
-    src: "https://images.pexels.com/photos/3816395/pexels-photo-3816395.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
-    alt: "Couples gallery photo",
-    category: "Couples",
-    width: 940,
-    height: 650,
-  },
-  {
-    src: "https://images.pexels.com/photos/16236467/pexels-photo-16236467.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
-    alt: "Kids gallery photo",
-    category: "Family",
-    width: 940,
-    height: 650,
-  },
-  {
-    src: "/images/product-1.png",
-    alt: "Pets gallery photo",
-    category: "Family",
-    width: 940,
-    height: 650,
-  },
-  {
-    src: "/images/product-2.png",
-    alt: "Travel gallery photo",
-    category: "Travel",
-    width: 940,
-    height: 650,
+    src: "https://pub-57b44696f3e243acb6e5fdb88145606e.r2.dev/gallery_images/IMG_8053.JPG.jpeg",
+    alt: "Birthday gallery photo",
+    category: "Birthday",
+    width: 1424,
+    height: 2532,
   },
   {
     src: "/images/product-5.png",
@@ -119,13 +64,6 @@ const galleryImages: GalleryImage[] = [
     height: 650,
   },
   {
-    src: "https://images.pexels.com/photos/13699200/pexels-photo-13699200.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
-    alt: "Travel gallery photo",
-    category: "Travel",
-    width: 940,
-    height: 650,
-  },
-  {
     src: "https://pub-57b44696f3e243acb6e5fdb88145606e.r2.dev/gallery_images/IMG_8028.JPG.jpeg",
     alt: "Wedding gallery photo",
     category: "Wedding",
@@ -140,13 +78,6 @@ const galleryImages: GalleryImage[] = [
     height: 1280,
   },
   {
-    src: "https://pub-57b44696f3e243acb6e5fdb88145606e.r2.dev/gallery_images/IMG_8030.JPG.jpeg",
-    alt: "Kids gallery photo",
-    category: "Family",
-    width: 992,
-    height: 1280,
-  },
-  {
     src: "https://pub-57b44696f3e243acb6e5fdb88145606e.r2.dev/gallery_images/IMG_8031.JPG.jpeg",
     alt: "Couples gallery photo",
     category: "Couples",
@@ -154,23 +85,9 @@ const galleryImages: GalleryImage[] = [
     height: 1280,
   },
   {
-    src: "https://pub-57b44696f3e243acb6e5fdb88145606e.r2.dev/gallery_images/IMG_8033.JPG.jpeg",
-    alt: "Wedding gallery photo",
-    category: "Wedding",
-    width: 960,
-    height: 1280,
-  },
-  {
     src: "https://pub-57b44696f3e243acb6e5fdb88145606e.r2.dev/gallery_images/IMG_8034.JPG.jpeg",
     alt: "Birthday gallery photo",
     category: "Birthday",
-    width: 960,
-    height: 1280,
-  },
-  {
-    src: "https://pub-57b44696f3e243acb6e5fdb88145606e.r2.dev/gallery_images/IMG_8035.JPG.jpeg",
-    alt: "Graduation gallery photo",
-    category: "Family",
     width: 960,
     height: 1280,
   },
@@ -245,7 +162,7 @@ const galleryImages: GalleryImage[] = [
     height: 1280,
   },
   {
-    src: "https://pub-57b44696f3e243acb6e5fdb88145606e.r2.dev/gallery_images/IMG_8046.JPG.jpeg",
+    src: "https://pub-57b44696f3e243acb6e5fdb88145606e.r2.dev/gallery_images/IMG_8039.JPG.jpeg",
     alt: "Birthday gallery photo",
     category: "Birthday",
     width: 1424,
@@ -255,13 +172,6 @@ const galleryImages: GalleryImage[] = [
     src: "https://pub-57b44696f3e243acb6e5fdb88145606e.r2.dev/gallery_images/IMG_8047.JPG.jpeg",
     alt: "Travel gallery photo",
     category: "Travel",
-    width: 3024,
-    height: 4032,
-  },
-  {
-    src: "https://pub-57b44696f3e243acb6e5fdb88145606e.r2.dev/gallery_images/IMG_8048.JPG.jpeg",
-    alt: "Couples gallery photo",
-    category: "Couples",
     width: 3024,
     height: 4032,
   },
@@ -296,14 +206,7 @@ const galleryImages: GalleryImage[] = [
 ];
 
 export default function GalleryPage() {
-  const [activeTab, setActiveTab] = useState("All");
-  const [showAll, setShowAll] = useState(false);
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
-
-  useEffect(() => {
-    setShowAll(false);
-    setPreviewIndex(null);
-  }, [activeTab]);
 
   useEffect(() => {
     document.body.style.overflow = previewIndex !== null ? "hidden" : "";
@@ -313,41 +216,25 @@ export default function GalleryPage() {
     };
   }, [previewIndex]);
 
-  const filteredImages =
-    activeTab === "All"
-      ? galleryImages
-      : galleryImages.filter((img) => img.category === activeTab);
-
-  const visibleImages = showAll
-    ? filteredImages
-    : filteredImages.slice(0, INITIAL_VISIBLE_COUNT);
-
-  const hasMoreImages = filteredImages.length > INITIAL_VISIBLE_COUNT;
-
-  const openPreview = (index: number) => {
-    setPreviewIndex(index);
-  };
-
-  const closePreview = () => {
-    setPreviewIndex(null);
-  };
+  const openPreview = (index: number) => setPreviewIndex(index);
+  const closePreview = () => setPreviewIndex(null);
 
   const showPrev = () => {
     setPreviewIndex((index) =>
       index === null
         ? null
-        : (index - 1 + visibleImages.length) % visibleImages.length,
+        : (index - 1 + galleryImages.length) % galleryImages.length,
     );
   };
 
   const showNext = () => {
     setPreviewIndex((index) =>
-      index === null ? null : (index + 1) % visibleImages.length,
+      index === null ? null : (index + 1) % galleryImages.length,
     );
   };
 
   const activeImage =
-    previewIndex !== null ? visibleImages[previewIndex] : null;
+    previewIndex !== null ? galleryImages[previewIndex] : null;
 
   return (
     <div className="min-h-screen bg-white">
@@ -384,93 +271,42 @@ export default function GalleryPage() {
           </div>
         </motion.section>
 
-        <div className="mt-4 w-full border-b border-gray-200 bg-white">
-          <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-6 lg:flex lg:w-full">
-            {tabs.map((tab) => {
-              const isActive = activeTab === tab.name;
-
-              return (
-                <button
-                  key={tab.name}
-                  type="button"
-                  onClick={() => setActiveTab(tab.name)}
-                  className={`flex min-w-0 cursor-pointer flex-col items-center justify-center gap-1 border-b-2 px-1 py-2.5 text-[10px] font-semibold transition-all duration-300 sm:py-3 sm:text-xs md:py-4 lg:flex-1 lg:px-2 lg:text-xs ${
-                    isActive
-                      ? "border-[#D40B0B] text-[#D40B0B]"
-                      : "border-transparent text-[#071B3D] hover:text-[#D40B0B]"
-                  }`}
-                >
-                  <tab.icon
-                    className="h-4 w-4 sm:h-5 sm:w-5"
-                    aria-hidden="true"
-                  />
-
-                  <span className="truncate">{tab.name}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
         <div className="pb-16">
-          {filteredImages.length === 0 ? (
+          {galleryImages.length === 0 ? (
             <p className="py-16 text-center text-gray-400">
-              No photos in this category yet.
+              No photos yet.
             </p>
           ) : (
             <motion.div
-              key={activeTab}
               initial="hidden"
               animate="visible"
               variants={{
                 hidden: {},
-                visible: {
-                  transition: {
-                    staggerChildren: 0.05,
-                  },
-                },
+                visible: { transition: { staggerChildren: 0.05 } },
               }}
-              className="grid grid-cols-2 items-start gap-2 py-4 sm:grid-cols-3 lg:grid-cols-5"
+              className="columns-2 gap-2 py-4 sm:columns-3 lg:columns-5"
             >
-              {visibleImages.map((image, index) => (
+              {galleryImages.map((image, index) => (
                 <motion.div
-                  key={`${activeTab}-${image.src}-${index}`}
+                  key={`${image.src}-${index}`}
                   variants={{
-                    hidden: {
-                      opacity: 0,
-                      y: 16,
-                    },
-                    visible: {
-                      opacity: 1,
-                      y: 0,
-                    },
+                    hidden: { opacity: 0, y: 16 },
+                    visible: { opacity: 1, y: 0 },
                   }}
                   onClick={() => openPreview(index)}
-                  className="group relative w-full cursor-pointer overflow-hidden rounded-2xl bg-gray-100 shadow-sm transition-all duration-500 hover:shadow-lg"
+                  className="group relative mb-2 w-full break-inside-avoid cursor-pointer overflow-hidden rounded-2xl bg-gray-100 shadow-sm transition-all duration-500 hover:shadow-lg"
                 >
                   <Image
                     src={image.src}
                     alt={image.alt}
                     width={image.width}
                     height={image.height}
-                    sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 33vw, (max-width: 1280px) 25vw, 20vw"
+                    sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, (max-width: 1280px) 25vw, 20vw"
                     className="h-auto w-full object-cover transition-transform duration-500 group-hover:scale-105"
                   />
                 </motion.div>
               ))}
             </motion.div>
-          )}
-
-          {hasMoreImages && (
-            <div className="mt-8 flex justify-center">
-              <button
-                type="button"
-                onClick={() => setShowAll((prev) => !prev)}
-                className="cursor-pointer rounded-full bg-gradient-to-r from-blue-600 to-blue-900 px-8 py-3 font-semibold text-white shadow-md transition-all duration-300 hover:-translate-y-0.5 hover:bg-[#b50909] hover:shadow-lg"
-              >
-                {showAll ? "Show Less" : "View All Gallery"}
-              </button>
-            </div>
           )}
         </div>
       </div>
@@ -485,18 +321,9 @@ export default function GalleryPage() {
             onClick={closePreview}
           >
             <motion.div
-              initial={{
-                scale: 0.9,
-                opacity: 0,
-              }}
-              animate={{
-                scale: 1,
-                opacity: 1,
-              }}
-              exit={{
-                scale: 0.9,
-                opacity: 0,
-              }}
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
               className="relative max-h-[85vh] w-full max-w-4xl overflow-hidden rounded-2xl"
               onClick={(e) => e.stopPropagation()}
             >
@@ -517,7 +344,7 @@ export default function GalleryPage() {
                 <X size={20} className="text-white" />
               </button>
 
-              {visibleImages.length > 1 && (
+              {galleryImages.length > 1 && (
                 <>
                   <button
                     onClick={showPrev}

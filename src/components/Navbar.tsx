@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Menu,
@@ -12,6 +12,9 @@ import {
   LogOut,
   LayoutDashboard,
   ShoppingCart,
+  ChevronDown,
+  UserCircle,
+  PackageSearch,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { authApi } from "@/app/api/auth.api";
@@ -28,10 +31,74 @@ export default function Navbar() {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [scrolled, setScrolled] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [mobileUserOpen, setMobileUserOpen] = useState(false);
   const [cartCount, setCartCount] = useState(0);
   const [mounted, setMounted] = useState(false);
 
   const pathname = usePathname();
+  const router = useRouter();
+  const userMenuRef = useRef<HTMLDivElement>(null);
+  const navRef = useRef<HTMLElement>(null);
+
+  // Close the user dropdown when clicking outside it or pressing Escape.
+  useEffect(() => {
+    if (!userMenuOpen) return;
+
+    const handlePointerDown = (event: MouseEvent | TouchEvent) => {
+      if (
+        userMenuRef.current &&
+        !userMenuRef.current.contains(event.target as Node)
+      ) {
+        setUserMenuOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setUserMenuOpen(false);
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("touchstart", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("touchstart", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [userMenuOpen]);
+
+  // Close the mobile menu when tapping/clicking anywhere outside the navbar, or pressing Escape.
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handlePointerDown = (event: MouseEvent | TouchEvent) => {
+      if (navRef.current && !navRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsOpen(false);
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("touchstart", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("touchstart", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen]);
+
+  // Collapse the username sub-menu whenever the mobile menu closes.
+  useEffect(() => {
+    if (!isOpen) setMobileUserOpen(false);
+  }, [isOpen]);
+
+  // Close menus after navigating to another page.
+  useEffect(() => {
+    setUserMenuOpen(false);
+    setIsOpen(false);
+  }, [pathname]);
 
   const fetchUser = async () => {
     try {
@@ -74,6 +141,7 @@ export default function Navbar() {
     setUser(null);
     setUserMenuOpen(false);
     setIsOpen(false);
+    router.push("/");
   };
 
   const navLinks = [
@@ -85,6 +153,7 @@ export default function Navbar() {
 
   return (
     <motion.nav
+      ref={navRef}
       initial={{ y: -100 }}
       animate={{ y: 0 }}
       transition={{ duration: 0.5 }}
@@ -144,15 +213,21 @@ export default function Navbar() {
             </Link>
 
             {mounted && user ? (
-              <div className="relative">
+              <div className="relative" ref={userMenuRef}>
                 <button
                   onClick={() => setUserMenuOpen(!userMenuOpen)}
+                  aria-haspopup="menu"
+                  aria-expanded={userMenuOpen}
                   className="flex items-center gap-2 rounded-lg border border-cyan-200 bg-gradient-to-r from-blue-50 to-teal-50 px-3 py-2 text-sm font-semibold text-blue-900 transition-all hover:shadow-md xl:px-4"
                 >
                   <User size={16} />
                   <span className="max-w-[100px] truncate xl:max-w-none">
-                    {user.fullName.split(" ")[0]}
+                    {(user.fullName || user.email).split(" ")[0]}
                   </span>
+                  <ChevronDown
+                    size={14}
+                    className={cn("transition-transform", userMenuOpen && "rotate-180")}
+                  />
                 </button>
 
                 <AnimatePresence>
@@ -161,8 +236,25 @@ export default function Navbar() {
                       initial={{ opacity: 0, scale: 0.95, y: -10 }}
                       animate={{ opacity: 1, scale: 1, y: 0 }}
                       exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                      className="absolute right-0 mt-2 w-48 overflow-hidden rounded-xl border border-blue-100 bg-white shadow-xl"
+                      role="menu"
+                      className="absolute right-0 mt-2 w-52 overflow-hidden rounded-xl border border-blue-100 bg-white shadow-xl"
                     >
+                      <Link
+                        href="/profile"
+                        className="flex items-center gap-2 px-4 py-3 text-sm text-slate-700 transition-colors hover:bg-blue-50"
+                        onClick={() => setUserMenuOpen(false)}
+                      >
+                        <UserCircle size={16} className="text-blue-900" />
+                        Profile
+                      </Link>
+                      <Link
+                        href="/orders"
+                        className="flex items-center gap-2 px-4 py-3 text-sm text-slate-700 transition-colors hover:bg-blue-50"
+                        onClick={() => setUserMenuOpen(false)}
+                      >
+                        <PackageSearch size={16} className="text-blue-900" />
+                        Order Tracking
+                      </Link>
                       {user.role === "admin" && (
                         <Link
                           href="/admin"
@@ -256,20 +348,58 @@ export default function Navbar() {
               <div className="mt-2 space-y-2 border-t border-slate-100 pt-3">
                 {mounted && user ? (
                   <>
-                    <div className="flex items-center gap-2 px-4 py-2">
+                    <button
+                      type="button"
+                      onClick={() => setMobileUserOpen((v) => !v)}
+                      aria-expanded={mobileUserOpen}
+                      className="flex w-full items-center gap-2 rounded-lg px-4 py-3 text-left transition-colors hover:bg-slate-50"
+                    >
                       <User size={15} className="text-blue-900" />
-                      <span className="text-sm font-bold text-slate-700">{user.fullName}</span>
-                    </div>
-                    {user.role === "admin" && (
-                      <Link
-                        href="/admin"
-                        onClick={() => setIsOpen(false)}
-                        className="flex items-center gap-2 rounded-lg px-4 py-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
-                      >
-                        <LayoutDashboard size={16} className="text-blue-900" />
-                        Admin Dashboard
-                      </Link>
-                    )}
+                      <span className="flex-1 truncate text-sm font-bold text-slate-700">
+                        {user.fullName || user.email}
+                      </span>
+                      <ChevronDown
+                        size={16}
+                        className={cn("text-slate-500 transition-transform", mobileUserOpen && "rotate-180")}
+                      />
+                    </button>
+                    <AnimatePresence initial={false}>
+                      {mobileUserOpen && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: "auto" }}
+                          exit={{ opacity: 0, height: 0 }}
+                          className="ml-6 space-y-1 overflow-hidden border-l border-slate-100 pl-2"
+                        >
+                          <Link
+                            href="/profile"
+                            onClick={() => setIsOpen(false)}
+                            className="flex items-center gap-2 rounded-lg px-4 py-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
+                          >
+                            <UserCircle size={16} className="text-blue-900" />
+                            Profile
+                          </Link>
+                          <Link
+                            href="/orders"
+                            onClick={() => setIsOpen(false)}
+                            className="flex items-center gap-2 rounded-lg px-4 py-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
+                          >
+                            <PackageSearch size={16} className="text-blue-900" />
+                            Order Tracking
+                          </Link>
+                          {user.role === "admin" && (
+                            <Link
+                              href="/admin"
+                              onClick={() => setIsOpen(false)}
+                              className="flex items-center gap-2 rounded-lg px-4 py-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
+                            >
+                              <LayoutDashboard size={16} className="text-blue-900" />
+                              Admin Dashboard
+                            </Link>
+                          )}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                     <button
                       onClick={handleLogout}
                       className="flex w-full items-center gap-2 rounded-lg px-4 py-3 text-sm font-semibold text-red-500 transition-colors hover:bg-red-50"

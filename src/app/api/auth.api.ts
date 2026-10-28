@@ -4,6 +4,9 @@ import { AxiosError } from "axios";
 
 function extractErrorMessage(err: unknown, fallback: string): Error {
   if (err instanceof AxiosError) {
+    if (!err.response) {
+      return new Error("Unable to reach the server. Please check your connection and try again.");
+    }
     const data = err.response?.data as { message?: string | string[] } | undefined;
     const msg = data?.message;
     if (Array.isArray(msg)) return new Error(msg[0] ?? fallback);
@@ -43,6 +46,19 @@ export const authApi = {
     }
   },
 
+  async updateProfile(data: {
+    fullName?: string;
+    phoneNumber?: string;
+    customerAddress?: string;
+  }) {
+    try {
+      const res = await api.patch("/auth/profile", data);
+      return res.data;
+    } catch (err) {
+      throw extractErrorMessage(err, "Could not update profile.");
+    }
+  },
+
   async changePassword(data: { currentPassword: string; newPassword: string }): Promise<void> {
     try {
       await api.post("/auth/change-password", data);
@@ -67,9 +83,10 @@ export const authApi = {
     }
   },
 
-  async activateAccount(token: string): Promise<void> {
+  async activateAccount(token: string): Promise<{ alreadyActivated?: boolean }> {
     try {
-      await api.patch(`/customers/token/${token}`, { isActive: true });
+      const res = await api.patch(`/customers/token/${token}`, { isActive: true });
+      return { alreadyActivated: Boolean(res.data?.data?.alreadyActivated) };
     } catch (err) {
       throw extractErrorMessage(err, "Account activation failed. Please try again.");
     }

@@ -28,7 +28,6 @@ function isLoggedIn(): boolean {
   const match = document.cookie.match(/(?:^|;\s*)token=([^;]*)/);
   return !!match?.[1];
 }
-const loggedIn = isLoggedIn();
 const COMPRESSION_OPTIONS = {
   maxSizeMB: 1,
   maxWidthOrHeight: 1920,
@@ -48,10 +47,24 @@ export default function ProductDetailPage({
   const [uploading, setUploading] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [selectedImage, setSelectedImage] = useState(0);
+  // Read the login cookie on the client (a module-level check goes stale after
+  // logging in via client-side navigation).
+  const [loggedIn, setLoggedIn] = useState(false);
   const [cartCount, setCartCount] = useState(() => {
     if (typeof window === "undefined") return 0;
     return JSON.parse(sessionStorage.getItem("cart") || "[]").length;
   });
+
+  useEffect(() => {
+    const syncLogin = () => setLoggedIn(isLoggedIn());
+    syncLogin();
+    window.addEventListener("userLoggedIn", syncLogin);
+    window.addEventListener("focus", syncLogin);
+    return () => {
+      window.removeEventListener("userLoggedIn", syncLogin);
+      window.removeEventListener("focus", syncLogin);
+    };
+  }, []);
 
   useEffect(() => {
     const fetchProduct = async () => {
@@ -67,23 +80,32 @@ export default function ProductDetailPage({
     fetchProduct();
   }, [id]);
 
+  const maxCount = product?.imagecount ?? 0;
+  const remainingSlots = Math.max(maxCount - uploadedFiles.length, 0);
+
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     accept: { "image/*": [] },
-    maxFiles: product?.imagecount || 10,
-    disabled: !loggedIn,
+    // Limit is enforced cumulatively in onDrop; when only one slot is left the
+    // file dialog switches to single-selection.
+    multiple: remainingSlots > 1,
     onDrop: (acceptedFiles) => {
-      if (!loggedIn) {
-        // toast.error("Please login to upload photos");
+      if (!isLoggedIn()) {
         router.push(`/login?redirect=${encodeURIComponent(`/shop/${id}`)}`);
         return;
       }
-      const maxCount = product?.imagecount || 10;
-      const remaining = maxCount - uploadedFiles.length;
-      const toAdd = acceptedFiles.slice(0, remaining);
-      if (acceptedFiles.length > remaining) {
-        toast.error(`Maximum ${maxCount} images allowed for this product`);
+      if (maxCount <= 0 || acceptedFiles.length === 0) return;
+
+      // Too many files for the remaining slots: reject the whole selection.
+      if (acceptedFiles.length > remainingSlots) {
+        toast.error(
+          remainingSlots === 0
+            ? `Maximum ${maxCount} photos allowed for this product`
+            : `You can select only ${remainingSlots} more photo${remainingSlots === 1 ? "" : "s"} (maximum ${maxCount}). Please select again.`,
+        );
+        return;
       }
-      setUploadedFiles((prev) => [...prev, ...toAdd]);
+
+      setUploadedFiles((prev) => [...prev, ...acceptedFiles]);
     },
   });
 
@@ -100,38 +122,48 @@ export default function ProductDetailPage({
     return;
     }
 
-    if (uploadedFiles.length === 0) {
-      toast.error("Please upload photos");
-      return;
-    }
-    if (uploadedFiles.length < product.imagecount) {
-      toast.error(`Please upload exactly ${product.imagecount} photos`);
-      return;
+    // Products with an image count of 0 (e.g. plain frames) need no photos.
+    const requiresPhotos = (product.imagecount ?? 0) > 0;
+
+    if (requiresPhotos) {
+      if (uploadedFiles.length === 0) {
+        toast.error("Please upload photos");
+        return;
+      }
+      if (uploadedFiles.length < product.imagecount) {
+        toast.error(`Please upload exactly ${product.imagecount} photos`);
+        return;
+      }
     }
 
     setUploading(true);
     try {
-      const compressedFiles = await Promise.all(
-        uploadedFiles.map(async (file) => {
-          const compressed = await imageCompression(file, COMPRESSION_OPTIONS);
-          const filename = `${file.name.replace(/\.[^/.]+$/, "")}.webp`;
+      let imageDataUrls: string[] = [];
 
-          return new File([compressed], filename, {
-            type: "image/webp",
-            lastModified: file.lastModified,
-          });
-        }),
-      );
+      if (requiresPhotos) {
+        const compressedFiles = await Promise.all(
+          uploadedFiles.map(async (file) => {
+            const compressed = await imageCompression(file, COMPRESSION_OPTIONS);
+            const filename = `${file.name.replace(/\.[^/.]+$/, "")}.webp`;
 
-      const formData = new FormData();
-      compressedFiles.forEach((file) => formData.append("files", file));
+            return new File([compressed], filename, {
+              type: "image/webp",
+              lastModified: file.lastModified,
+            });
+          }),
+        );
 
-      const res = await fetch("/api/upload-r2", {
-        method: "POST",
-        body: formData,
-      });
-      if (!res.ok) throw new Error("Upload failed");
-      const { urls: imageDataUrls } = await res.json();
+        const formData = new FormData();
+        compressedFiles.forEach((file) => formData.append("files", file));
+
+        const res = await fetch("/api/upload-r2", {
+          method: "POST",
+          body: formData,
+        });
+        if (!res.ok) throw new Error("Upload failed");
+        const uploaded = await res.json();
+        imageDataUrls = uploaded.urls;
+      }
 
       const cart: CartItem[] = JSON.parse(
         sessionStorage.getItem("cart") || "[]",
@@ -266,8 +298,11 @@ export default function ProductDetailPage({
     );
   }
 
-  const maxImages = product.imagecount;
-  const uploadProgress = Math.round((uploadedFiles.length / maxImages) * 100);
+  const maxImages = product.imagecount ?? 0;
+  const requiresPhotos = maxImages > 0;
+  const uploadProgress = requiresPhotos
+    ? Math.round((uploadedFiles.length / maxImages) * 100)
+    : 0;
   const productImageUrls = [
     product.primaryImage?.secure_url,
     ...(product.galleryImages || []).map((image) => image?.secure_url),
@@ -403,12 +438,14 @@ export default function ProductDetailPage({
               )}
               <div className="flex flex-wrap items-center lg:items-end justify-center lg:justify-between gap-4 pt-3 border-t border-slate-100">
                 <div className="flex gap-3">
-                  <div className="bg-blue-50 rounded-2xl px-4 py-2.5 text-center">
-                    <p className="text-xl font-black text-red-600">
-                      {product.imagecount}
-                    </p>
-                    <p className="text-xs text-blue-900 font-medium">Photos</p>
-                  </div>
+                  {requiresPhotos && (
+                    <div className="bg-blue-50 rounded-2xl px-4 py-2.5 text-center">
+                      <p className="text-xl font-black text-red-600">
+                        {product.imagecount}
+                      </p>
+                      <p className="text-xs text-blue-900 font-medium">Photos</p>
+                    </div>
+                  )}
                   <div className="bg-teal-50 rounded-2xl px-4 py-2.5 text-center">
                     <p className="text-xl font-black text-red-600">
                       {product.stock}
@@ -429,6 +466,8 @@ export default function ProductDetailPage({
 
             {/* Photo Upload */}
             <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-100 shadow-sm">
+              {requiresPhotos && (
+              <>
               <div className="flex items-center justify-between mb-1">
                 <div className="flex items-center gap-2">
                   <div className="w-7 h-7 bg-blue-100 rounded-lg flex items-center justify-center">
@@ -457,7 +496,16 @@ export default function ProductDetailPage({
               </div>
 
               <div
-                {...getRootProps()}
+                {...getRootProps({
+                  onClick: (event) => {
+                    // Guests are sent to the login page instead of opening the file dialog.
+                    if (!isLoggedIn()) {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      router.push(`/login?redirect=${encodeURIComponent(`/shop/${id}`)}`);
+                    }
+                  },
+                })}
                 className={`border-2 border-dashed rounded-2xl p-6 sm:p-8 text-center cursor-pointer transition-all duration-200 ${
                   isDragActive
                     ? "border-blue-900 bg-blue-50 scale-[1.01]"
@@ -509,6 +557,9 @@ export default function ProductDetailPage({
                     </div>
                   ))}
                 </div>
+              )}
+
+              </>
               )}
 
               <button

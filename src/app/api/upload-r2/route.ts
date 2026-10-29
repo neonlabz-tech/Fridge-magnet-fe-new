@@ -11,10 +11,16 @@ const r2 = new S3Client({
   },
 });
 
+// Only these R2 folders can be written to from the website.
+const ALLOWED_FOLDERS = ["orders", "receipts"];
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB per file
+
 export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
     const files = formData.getAll("files") as File[];
+    const requestedFolder = String(formData.get("folder") || "orders");
+    const folder = ALLOWED_FOLDERS.includes(requestedFolder) ? requestedFolder : "orders";
 
     if (!files || files.length === 0) {
       return NextResponse.json({ error: "No files provided" }, { status: 400 });
@@ -23,9 +29,15 @@ export async function POST(req: NextRequest) {
     const urls: string[] = [];
 
     for (const file of files) {
+      if (file.size > MAX_FILE_SIZE) {
+        return NextResponse.json({ error: "File too large" }, { status: 413 });
+      }
+      if (folder === "receipts" && !file.type.startsWith("image/")) {
+        return NextResponse.json({ error: "Receipts must be images" }, { status: 400 });
+      }
       const buffer = Buffer.from(await file.arrayBuffer());
       const ext = file.name.split(".").pop() || "jpg";
-      const key = `orders/${uuidv4()}.${ext}`;
+      const key = `${folder}/${uuidv4()}.${ext}`;
 
       await r2.send(
         new PutObjectCommand({

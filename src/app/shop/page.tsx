@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { motion } from "framer-motion";
@@ -20,28 +20,22 @@ function isLoggedIn(): boolean {
 export default function ShopPage() {
   const router = useRouter();
   const [products, setProducts] = useState<Product[]>([]);
-  const [filtered, setFiltered] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
 
   useEffect(() => {
     productApi.getAllProducts()
-      .then((data) => {
-        setProducts(data);
-        setFiltered(data);
-      })
+      .then((data) => setProducts(data))
       .catch((e) => console.error("Failed to fetch products:", e))
       .finally(() => setLoading(false));
   }, []);
 
-  useEffect(() => {
+  const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    setFiltered(
-      products.filter(
-        (p) =>
-          p.productName.toLowerCase().includes(q) ||
-          (p.description || "").toLowerCase().includes(q)
-      )
+    return products.filter(
+      (p) =>
+        p.productName.toLowerCase().includes(q) ||
+        (p.description || "").toLowerCase().includes(q)
     );
   }, [search, products]);
 

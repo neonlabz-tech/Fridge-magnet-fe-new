@@ -30,10 +30,12 @@ const MAX_SLIP_SIZE = 5 * 1024 * 1024; // 5 MB
 type PaymentMethod = "cod" | "bank_transfer" | "card";
 
 const BANK_DETAILS = [
-  { label: "Account Name", value: "Magnify" },
-  { label: "Account Number", value: "1234 5678 9101" },
-  { label: "Bank Name", value: "Commercial Bank" },
-  { label: "Branch Name", value: "Jaffna main branch" },
+  { label: "Bank", value: "HNB" },
+  { label: "Account Name", value: "NEONLABZ(PVT)LTD" },
+  { label: "Account Number", value: "016021040574" },
+  { label: "Branch", value: "Jaffna" },
+  { label: "Mobile", value: "+94 753912534" },
+  { label: "Mail", value: "Magnifyofficials@gmail.com" },
 ];
 
 function isJaffnaAddress(address: string) {
@@ -443,10 +445,15 @@ export default function CheckoutPage() {
                         {BANK_DETAILS.map((row) => (
                           <div key={row.label} className="flex justify-between gap-4">
                             <dt className="text-slate-500">{row.label}</dt>
-                            <dd className="font-semibold text-slate-800 text-right">{row.value}</dd>
+                            <dd className="font-semibold text-slate-800 text-right break-all">{row.value}</dd>
                           </div>
                         ))}
                       </dl>
+                      <p className="mt-4 border-t border-blue-100 pt-3 text-xs leading-relaxed text-slate-600">
+                        Full payment is required to confirm and start your custom magnet order. Kindly share the
+                        payment receipt so we can verify and confirm your order.
+                        <span className="mt-1 block font-semibold text-blue-900">Thank you! ✅</span>
+                      </p>
                     </div>
 
                     <div>

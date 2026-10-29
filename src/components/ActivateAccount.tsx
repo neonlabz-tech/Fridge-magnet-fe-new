@@ -17,6 +17,7 @@ function ActivateAccountContent() {
 
   const [status, setStatus] = useState<Status>("idle");
   const [errorMsg, setErrorMsg] = useState("");
+  const [already, setAlready] = useState(false);
 
   const handleActivate = async () => {
     if (!token) {
@@ -27,7 +28,8 @@ function ActivateAccountContent() {
 
     setStatus("pending");
     try {
-      await authApi.activateAccount(token);
+      const result = await authApi.activateAccount(token);
+      setAlready(Boolean(result?.alreadyActivated));
       setStatus("success");
       setTimeout(() => router.push("/login"), 3000);
     } catch (err: any) {
@@ -107,9 +109,11 @@ function ActivateAccountContent() {
             >
               <CheckCircle2 size={32} className="text-green-600" />
             </motion.div>
-            <h2 className="text-2xl font-black text-blue-900 mb-2">Account activated!</h2>
+            <h2 className="text-2xl font-black text-blue-900 mb-2">{already ? "Already activated" : "Account activated!"}</h2>
             <p className="text-slate-500 text-sm mb-6">
-              Your account is now active. Redirecting you to sign in…
+              {already
+                ? "This link was already used. Your account is activated — please sign in."
+                : "Your account is now active. Redirecting you to sign in…"}
             </p>
             <Link
               href="/login"

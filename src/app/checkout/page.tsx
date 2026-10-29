@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import toast from "react-hot-toast";
@@ -14,24 +14,42 @@ import {
   MapPin,
   Trash2,
   ImageIcon,
+  Landmark,
+  Upload,
+  X,
 } from "lucide-react";
 import { formatPrice } from "@/lib/utils";
 import type { CartItem } from "@/lib/data";
 import api from "@/lib/axios";
+import { PHONE_ERROR, PHONE_LENGTH, isValidPhone, normalizeStoredPhone, sanitizePhone } from "@/lib/phone";
 
-const JAFFNA_COD_DELIVERY_FEE = 300;
+// Flat delivery fee for every address.
+const DELIVERY_FEE = 300;
+const MAX_SLIP_SIZE = 5 * 1024 * 1024; // 5 MB
 
-function getDeliveryFee(address: string, paymentMethod: "cod" | "card") {
-  return paymentMethod === "cod" && address.toLowerCase().includes("jaffna")
-    ? JAFFNA_COD_DELIVERY_FEE
-    : 0;
+type PaymentMethod = "cod" | "bank_transfer" | "card";
+
+const BANK_DETAILS = [
+  { label: "Bank", value: "HNB" },
+  { label: "Account Name", value: "NEONLABZ(PVT)LTD" },
+  { label: "Account Number", value: "016021040574" },
+  { label: "Branch", value: "Jaffna" },
+  { label: "Mobile", value: "+94 753912534" },
+  { label: "Mail", value: "Magnifyofficials@gmail.com" },
+];
+
+function isJaffnaAddress(address: string) {
+  return address.toLowerCase().includes("jaffna");
 }
 
 export default function CheckoutPage() {
   const router = useRouter();
   const [cart, setCart] = useState<CartItem[]>([]);
   const [submitting, setSubmitting] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<"cod" | "card">("cod");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("bank_transfer");
+  const [slipFile, setSlipFile] = useState<File | null>(null);
+  const [slipPreview, setSlipPreview] = useState<string | null>(null);
+  const slipInputRef = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState({
     customerName: "",
     customerEmail: "",
@@ -56,7 +74,7 @@ export default function CheckoutPage() {
             ...prev,
             customerName: d.user.fullName || "",
             customerEmail: d.user.email || "",
-            customerPhone: d.user.phoneNumber || "",
+            customerPhone: normalizeStoredPhone(d.user.phoneNumber),
             address: d.user.customerAddress || "",
           }));
         }
@@ -73,24 +91,83 @@ export default function CheckoutPage() {
   };
 
   const subtotal = cart.reduce((sum, item) => sum + Number(item.price), 0);
-  const deliveryFee = getDeliveryFee(form.address, paymentMethod);
+  const deliveryFee = DELIVERY_FEE;
   const totalPrice = subtotal + deliveryFee;
 
-  //COD avilable only Jaffna
-  const isJaffnaAddress = form.address.toLowerCase().includes("jaffna");
-  const codUnavailable = paymentMethod === "cod" && form.address.trim() !== "" && !isJaffnaAddress;
+  const hasAddress = form.address.trim() !== "";
+  const jaffna = isJaffnaAddress(form.address);
+  const deliveryNote = jaffna ? "1 day delivery" : "2 to 3 working days delivery";
+
+  // Cash on Delivery is only possible for Jaffna addresses.
+  useEffect(() => {
+    if (paymentMethod === "cod" && !jaffna) setPaymentMethod("bank_transfer");
+  }, [paymentMethod, jaffna]);
+
+  // Local preview of the chosen bank slip.
+  useEffect(() => {
+    if (!slipFile) {
+      setSlipPreview(null);
+      return;
+    }
+    const url = URL.createObjectURL(slipFile);
+    setSlipPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [slipFile]);
+
+  const handleSlipChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please upload an image of your receipt (JPG, PNG or WEBP).");
+      return;
+    }
+    if (file.size > MAX_SLIP_SIZE) {
+      toast.error("Receipt image must be 5 MB or smaller.");
+      return;
+    }
+    setSlipFile(file);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (cart.length === 0) return;
 
-    if (paymentMethod === "cod" && !form.address.toLowerCase().includes("jaffna")) {
+    if (!isValidPhone(form.customerPhone)) {
+      toast.error(PHONE_ERROR);
+      return;
+    }
+
+    if (paymentMethod === "card") {
+      toast.error("Card payment is currently unavailable.");
+      return;
+    }
+
+    if (paymentMethod === "cod" && !jaffna) {
       toast.error("Cash on Delivery is available only for Jaffna addresses.");
+      return;
+    }
+
+    if (paymentMethod === "bank_transfer" && !slipFile) {
+      toast.error("Please upload your bank transfer receipt.");
       return;
     }
 
     setSubmitting(true);
     try {
+      // Bank transfer: upload the receipt to Cloudflare R2 (receipts folder) first.
+      let paymentSlipUrl: string | undefined;
+      if (paymentMethod === "bank_transfer" && slipFile) {
+        const formData = new FormData();
+        formData.append("files", slipFile);
+        formData.append("folder", "receipts");
+        const uploadRes = await fetch("/api/upload-r2", { method: "POST", body: formData });
+        if (!uploadRes.ok) throw new Error("Failed to upload the receipt. Please try again.");
+        const uploaded = await uploadRes.json();
+        paymentSlipUrl = uploaded.urls?.[0];
+        if (!paymentSlipUrl) throw new Error("Failed to upload the receipt. Please try again.");
+      }
+
       const { data } = await api.post("/orders", {
         orderId: `ORD-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
         customerName: form.customerName,
@@ -110,6 +187,7 @@ export default function CheckoutPage() {
         })),
         qty: cart.length,
         paymentMethod,
+        ...(paymentSlipUrl ? { paymentSlipUrl } : {}),
       });
 
       sessionStorage.removeItem("cart");
@@ -207,13 +285,16 @@ export default function CheckoutPage() {
               <div className="flex justify-between text-sm text-slate-500 pt-1">
                 <span>Delivery</span>
                 <span className="text-red-600 font-semibold">
-                  {deliveryFee === 0 ? "-" : formatPrice(deliveryFee.toString())}
+                  {formatPrice(deliveryFee.toString())}
                 </span>
               </div>
               <div className="flex justify-between pt-3 border-t border-slate-100">
                 <span className="font-bold text-slate-800">Total</span>
                 <span className="text-2xl font-black text-blue-900">{formatPrice(totalPrice.toString())}</span>
               </div>
+              {hasAddress && (
+                <p className="text-xs font-semibold text-red-600 text-right">{deliveryNote}</p>
+              )}
             </div>
           </motion.div>
 
@@ -245,9 +326,14 @@ export default function CheckoutPage() {
                     <label className="block text-xs font-semibold text-slate-500 mb-1.5">Phone *</label>
                     <input
                       required
+                      type="tel"
+                      inputMode="numeric"
+                      maxLength={PHONE_LENGTH}
+                      pattern={`\\d{${PHONE_LENGTH}}`}
+                      title={PHONE_ERROR}
                       value={form.customerPhone}
-                      onChange={(e) => setForm({ ...form, customerPhone: e.target.value })}
-                      placeholder="+94 77 000 0000"
+                      onChange={(e) => setForm({ ...form, customerPhone: sanitizePhone(e.target.value) })}
+                      placeholder="0771234567"
                       className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-50 focus:border-blue-900 transition-all"
                     />
                   </div>
@@ -294,54 +380,136 @@ export default function CheckoutPage() {
                   <h2 className="text-lg font-black text-slate-800">Payment Method</h2>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 mb-5">
-                  <button
-                    type="button"
-                    onClick={() => setPaymentMethod("cod")}
-                    className={`flex items-center gap-3 p-4 rounded-2xl border-2 transition-all ${
-                      paymentMethod === "cod"
-                        ? "border-blue-900 bg-blue-50 shadow-sm"
-                        : "border-slate-200 hover:border-slate-300"
-                    }`}
-                  >
-                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${
-                      paymentMethod === "cod" ? "bg-blue-900" : "bg-slate-100"
-                    }`}>
-                      <Truck size={16} className={paymentMethod === "cod" ? "text-white" : "text-slate-400"} />
-                    </div>
-                    <div className="text-left">
-                      <p className={`text-xs font-bold ${paymentMethod === "cod" ? "text-red-600" : "text-slate-600"}`}>
-                        Cash on Delivery
-                      </p>
-                      <p className="text-xs text-slate-400">Pay on arrival</p>
-                    </div>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPaymentMethod("card")}
-                    className={`flex items-center gap-3 p-4 rounded-2xl border-2 transition-all ${
-                      paymentMethod === "card"
-                        ? "border-blue-900 bg-blue-50 shadow-sm"
-                        : "border-slate-200 hover:border-slate-300"
-                    }`}
-                  >
-                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${
-                      paymentMethod === "card" ? "bg-blue-900" : "bg-slate-100"
-                    }`}>
-                      <CreditCard size={16} className={paymentMethod === "card" ? "text-white" : "text-slate-400"} />
-                    </div>
-                    <div className="text-left">
-                      <p className={`text-xs font-bold ${paymentMethod === "card" ? "text-red-600" : "text-slate-600"}`}>
-                        Card Payment
-                      </p>
-                      <p className="text-xs text-slate-400">Pay online</p>
-                    </div>
-                  </button>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
+                  {([
+                    {
+                      key: "cod" as const,
+                      title: "Cash on Delivery",
+                      subtitle: "Jaffna only",
+                      icon: Truck,
+                      disabled: !jaffna,
+                    },
+                    {
+                      key: "bank_transfer" as const,
+                      title: "Bank Transfer",
+                      subtitle: "All addresses",
+                      icon: Landmark,
+                      disabled: false,
+                    },
+                    {
+                      key: "card" as const,
+                      title: "Card Payment",
+                      subtitle: "Unavailable",
+                      icon: CreditCard,
+                      disabled: true,
+                    },
+                  ]).map(({ key, title, subtitle, icon: Icon, disabled }) => {
+                    const selected = paymentMethod === key;
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        disabled={disabled}
+                        onClick={() => setPaymentMethod(key)}
+                        className={`flex items-center gap-3 p-4 rounded-2xl border-2 transition-all text-left ${
+                          selected
+                            ? "border-blue-900 bg-blue-50 shadow-sm"
+                            : "border-slate-200 hover:border-slate-300"
+                        } ${disabled ? "opacity-50 cursor-not-allowed hover:border-slate-200" : ""}`}
+                      >
+                        <div
+                          className={`w-9 h-9 flex-shrink-0 rounded-xl flex items-center justify-center ${
+                            selected ? "bg-blue-900" : "bg-slate-100"
+                          }`}
+                        >
+                          <Icon size={16} className={selected ? "text-white" : "text-slate-400"} />
+                        </div>
+                        <div className="min-w-0">
+                          <p className={`text-xs font-bold ${selected ? "text-red-600" : "text-slate-600"}`}>
+                            {title}
+                          </p>
+                          <p className="text-xs text-slate-400">{subtitle}</p>
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
+
+                {paymentMethod === "bank_transfer" && (
+                  <div className="mb-5 space-y-4">
+                    <div className="rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
+                      <p className="mb-3 text-xs font-bold uppercase tracking-wide text-blue-900">
+                        Bank Details
+                      </p>
+                      <dl className="space-y-2 text-sm">
+                        {BANK_DETAILS.map((row) => (
+                          <div key={row.label} className="flex justify-between gap-4">
+                            <dt className="text-slate-500">{row.label}</dt>
+                            <dd className="font-semibold text-slate-800 text-right break-all">{row.value}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                      <p className="mt-4 border-t border-blue-100 pt-3 text-xs leading-relaxed text-slate-600">
+                        Full payment is required to confirm and start your custom magnet order. Kindly share the
+                        payment receipt so we can verify and confirm your order.
+                        <span className="mt-1 block font-semibold text-blue-900">Thank you! ✅</span>
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 mb-1.5">
+                        Upload Payment Receipt *
+                      </label>
+                      <input
+                        ref={slipInputRef}
+                        type="file"
+                        accept="image/*"
+                        onChange={handleSlipChange}
+                        className="hidden"
+                      />
+                      {slipFile && slipPreview ? (
+                        <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={slipPreview} alt="Payment receipt" className="h-16 w-16 rounded-xl object-cover" />
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-semibold text-slate-700">{slipFile.name}</p>
+                            <button
+                              type="button"
+                              onClick={() => slipInputRef.current?.click()}
+                              className="text-xs font-semibold text-blue-700 hover:underline"
+                            >
+                              Change
+                            </button>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setSlipFile(null)}
+                            aria-label="Remove receipt"
+                            className="flex h-8 w-8 items-center justify-center rounded-xl bg-red-50 hover:bg-red-100"
+                          >
+                            <X size={14} className="text-red-600" />
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => slipInputRef.current?.click()}
+                          className="flex w-full flex-col items-center gap-2 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center transition-all hover:border-blue-300 hover:bg-blue-50/40"
+                        >
+                          <Upload size={20} className="text-blue-900" />
+                          <span className="text-sm font-semibold text-slate-600">
+                            Click to upload your bank receipt
+                          </span>
+                          <span className="text-xs text-slate-400">JPG, PNG or WEBP • max 5 MB</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 <button
                   type="submit"
-                  disabled={submitting || codUnavailable}
+                  disabled={submitting || paymentMethod === "card"}
                   className="w-full bg-gradient-to-r from-blue-600 to-blue-900 text-white font-black py-4 px-6 rounded-2xl hover:shadow-xl hover:shadow-blue-50 hover:-translate-y-0.5 transition-all disabled:opacity-60 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-2 text-base"
                 >
                   {submitting ? (
@@ -356,11 +524,6 @@ export default function CheckoutPage() {
                     </>
                   )}
                 </button>
-                {codUnavailable && (
-                  <p className="text-xs text-red-600 font-semibold mb-3 mt-2">
-                    Cash on Delivery is only available for Jaffna addresses. Please enter your delivery address or choose Card Payment.
-                  </p>
-                )}
               </div>
             </form>
           </motion.div>

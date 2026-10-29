@@ -6,7 +6,7 @@ import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import toast from "react-hot-toast";
-import { Eye, EyeOff, Loader2, Mail, Lock, ArrowLeft} from "lucide-react";
+import { Eye, EyeOff, Loader2, Mail, Lock, ArrowLeft, XCircle } from "lucide-react";
 import { authApi } from "../api/auth.api";
 
 function LoginForm() {
@@ -17,14 +17,30 @@ function LoginForm() {
   const [form, setForm] = useState({ email: "", password: "", remember: false });
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [formError, setFormError] = useState("");
+  const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
+
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+  const validate = () => {
+    const next: { email?: string; password?: string } = {};
+    const email = form.email.trim();
+    if (!email) next.email = "Email is required.";
+    else if (!EMAIL_RE.test(email)) next.email = "Please enter a valid email address.";
+    if (!form.password) next.password = "Password is required.";
+    setErrors(next);
+    return Object.keys(next).length === 0;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError("");
+    if (!validate()) return;
+
     setLoading(true);
     try {
-      const data = await authApi.login({ email: form.email, password: form.password });
+      const data = await authApi.login({ email: form.email.trim(), password: form.password });
       toast.success(`Welcome back, ${data.user?.fullName ?? ""}`);
-      router.push("/");
       window.dispatchEvent(new Event("userLoggedIn"));
 
       if (redirect) {
@@ -35,11 +51,18 @@ function LoginForm() {
         router.push("/");
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Login failed");
+      setFormError(err instanceof Error ? err.message : "Login failed. Please try again.");
     } finally {
       setLoading(false);
     }
   };
+
+  const fieldClass = (hasError: boolean) =>
+    `flex items-center gap-3 bg-slate-50 border rounded-xl px-4 py-3 transition-colors focus-within:ring-2 ${
+      hasError
+        ? "border-red-500 focus-within:border-red-500 focus-within:ring-red-500/15"
+        : "border-slate-200 focus-within:border-blue-900 focus-within:ring-blue-900/15"
+    }`;
 
   return (
     <div className="h-screen bg-blue-900 relative flex items-center justify-center overflow-hidden px-6 py-16">
@@ -77,29 +100,42 @@ function LoginForm() {
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} noValidate className="space-y-4">
+          {formError && (
+            <div role="alert" className="flex flex-col items-center gap-2 rounded-xl border border-red-100 bg-red-50 px-4 py-4 text-center">
+              <XCircle size={28} className="text-red-600" />
+              <p className="text-sm font-medium text-red-600">{formError}</p>
+            </div>
+          )}
           <div>
-            <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus-within:border-blue-900 focus-within:ring-2 focus-within:ring-blue-900/15 transition-colors">
+            <div className={fieldClass(Boolean(errors.email))}>
               <Mail size={16} className="text-slate-400 shrink-0" />
               <input
-                type="text"
-                required
+                type="email"
+                autoComplete="email"
                 value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                onChange={(e) => {
+                  setForm({ ...form, email: e.target.value });
+                  if (errors.email) setErrors((p) => ({ ...p, email: undefined }));
+                }}
                 placeholder="Email address"
                 className="w-full bg-transparent focus:outline-none text-sm text-slate-900 placeholder:text-slate-400"
               />
             </div>
+            {errors.email && <p className="mt-1.5 px-1 text-xs font-medium text-red-600">{errors.email}</p>}
           </div>
 
           <div>
-            <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus-within:border-blue-900 focus-within:ring-2 focus-within:ring-blue-900/15 transition-colors">
+            <div className={fieldClass(Boolean(errors.password))}>
               <Lock size={16} className="text-slate-400 shrink-0" />
               <input
                 type={showPassword ? "text" : "password"}
-                required
+                autoComplete="current-password"
                 value={form.password}
-                onChange={(e) => setForm({ ...form, password: e.target.value })}
+                onChange={(e) => {
+                  setForm({ ...form, password: e.target.value });
+                  if (errors.password) setErrors((p) => ({ ...p, password: undefined }));
+                }}
                 placeholder="Password"
                 className="w-full bg-transparent focus:outline-none text-sm text-slate-900 placeholder:text-slate-400"
               />
@@ -112,6 +148,7 @@ function LoginForm() {
                 {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
+            {errors.password && <p className="mt-1.5 px-1 text-xs font-medium text-red-600">{errors.password}</p>}
           </div>
 
           <div className="flex items-center justify-between text-sm px-1">

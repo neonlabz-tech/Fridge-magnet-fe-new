@@ -141,28 +141,46 @@ export default function ProductDetailPage({
       let imageDataUrls: string[] = [];
 
       if (requiresPhotos) {
-        const compressedFiles = await Promise.all(
-          uploadedFiles.map(async (file) => {
-            const compressed = await imageCompression(file, COMPRESSION_OPTIONS);
-            const filename = `${file.name.replace(/\.[^/.]+$/, "")}.webp`;
+        // Compress and upload ONE photo per request: a single request with 12+ photos is
+        // bigger than the host's request-size limit (about 4.5 MB) and fails.
+        const uploadOne = async (file: File): Promise<string> => {
+          const compressed = await imageCompression(file, COMPRESSION_OPTIONS);
+          const filename = `${file.name.replace(/\.[^/.]+$/, "")}.webp`;
+          const webp = new File([compressed], filename, {
+            type: "image/webp",
+            lastModified: file.lastModified,
+          });
 
-            return new File([compressed], filename, {
-              type: "image/webp",
-              lastModified: file.lastModified,
-            });
-          }),
-        );
+          let lastError: unknown;
+          for (let attempt = 0; attempt < 3; attempt++) {
+            try {
+              const formData = new FormData();
+              formData.append("files", webp);
+              const res = await fetch("/api/upload-r2", { method: "POST", body: formData });
+              if (!res.ok) throw new Error(`Upload failed (${res.status})`);
+              const uploaded = await res.json();
+              const url = uploaded?.urls?.[0];
+              if (!url) throw new Error("Upload returned no URL");
+              return url as string;
+            } catch (e) {
+              lastError = e;
+              await new Promise((r) => setTimeout(r, 600 * (attempt + 1)));
+            }
+          }
+          throw lastError instanceof Error ? lastError : new Error("Upload failed");
+        };
 
-        const formData = new FormData();
-        compressedFiles.forEach((file) => formData.append("files", file));
-
-        const res = await fetch("/api/upload-r2", {
-          method: "POST",
-          body: formData,
-        });
-        if (!res.ok) throw new Error("Upload failed");
-        const uploaded = await res.json();
-        imageDataUrls = uploaded.urls;
+        // 3 at a time, results kept in the same order as the selected photos.
+        const results: string[] = new Array(uploadedFiles.length);
+        let next = 0;
+        const worker = async () => {
+          while (next < uploadedFiles.length) {
+            const i = next++;
+            results[i] = await uploadOne(uploadedFiles[i]);
+          }
+        };
+        await Promise.all(Array.from({ length: Math.min(3, uploadedFiles.length) }, worker));
+        imageDataUrls = results;
       }
 
       const cart: CartItem[] = JSON.parse(
